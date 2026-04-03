@@ -324,7 +324,7 @@
         <div class="modal-content max-w-lg text-center">
             <h3 class="text-2xl font-bold mb-4 text-blue-700">중요 안내</h3>
             <p class="text-lg text-gray-800 mb-6 font-semibold">
-                아이폰에서는 공유 기능으로 카카오톡 등에 바로 전달할 수 있고,<br>
+                아이폰에서는 저장된 웹페이지를 카카오톡으로 전달할 수 있도록 공유를 안내하고,<br>
                 데스크탑이나 갤럭시에서는 HTML 파일로 저장 후 공유할 수 있습니다.
             </p>
             <div class="flex justify-center">
@@ -857,101 +857,21 @@
             return /iPhone/i.test(userAgent);
         }
 
-        function generateTextSummary(formData) {
-            const lines = [];
-            const shootTypeMap = {
-                'natural-light': '자연광',
-                'cut-out': '누끼',
-                'ghost': '고스트',
-                'styled-shoot': '연출컷'
-            };
-            const backgroundColorMap = {
-                'white': '화이트',
-                'black': '블랙',
-                'red': '레드',
-                'blue': '블루',
-                'gray': '그레이'
-            };
-            const productTypeMap = {
-                'apparel': '의류',
-                'misc': '잡화'
-            };
-            const cutLabelMap = {
-                front: '앞면',
-                back: '뒷면',
-                side: '옆면',
-                '45degree': '측면(45도)',
-                topView: '탑뷰',
-                neckline: '넥라인',
-                sleeve: '소매',
-                hem: '밑단',
-                logo: '로고',
-                button: '단추',
-                zipper: '지퍼',
-                string: '스트링',
-                material: '소재',
-                shoulder: '어깨',
-                lining: '안감',
-                pocket: '주머니',
-                waist: '허리',
-                frontPocket: '앞주머니',
-                backPocket: '뒷주머니',
-                buckle: '버클부분',
-                handle: '손잡이',
-                bagLining: '가방 속 안감',
-                bagLogo: '가방로고'
-            };
-
-            lines.push('[작업 지시서]');
-            lines.push('');
-            lines.push('1. 기본 정보');
-            lines.push(`- 촬영일: ${formData.basicInfo.shootDate || '-'}`);
-            lines.push(`- 브랜드명 / 업체명: ${formData.basicInfo.brandName || '-'}`);
-            lines.push(`- 촬영 종류: ${shootTypeMap[formData.basicInfo.shootType] || formData.basicInfo.shootType || '-'}`);
-            if (formData.basicInfo.backgroundColor) {
-                lines.push(`- 배경 색상: ${backgroundColorMap[formData.basicInfo.backgroundColor] || formData.basicInfo.backgroundColor}`);
-            }
-            lines.push(`- 사진 비율: ${formData.basicInfo.imageRatio || '-'}`);
-
-            if (formData.products && formData.products.length > 0) {
-                lines.push('');
-                lines.push('2. 제품 촬영 요청');
-                formData.products.forEach((product, index) => {
-                    const selectedCuts = Object.keys(product.requestedCuts || {})
-                        .filter(key => product.requestedCuts[key])
-                        .map(key => cutLabelMap[key] || key);
-
-                    lines.push(`- 제품 ${index + 1}`);
-                    lines.push(`  · 제품명: ${product.productName || '-'}`);
-                    lines.push(`  · 제품 타입: ${productTypeMap[product.productType] || product.productType || '-'}`);
-                    lines.push(`  · 요청 컷: ${selectedCuts.length > 0 ? selectedCuts.join(', ') : '-'}`);
-                    lines.push(`  · 기타 디테일 컷: ${product.otherDetails || '-'}`);
-                });
+        async function shareHtmlFile(file) {
+            if (!navigator.share || !navigator.canShare) {
+                return false;
             }
 
-            if (formData.additionalDetails && formData.additionalDetails.length > 0) {
-                lines.push('');
-                lines.push('3. 연출컷 촬영 요청');
-                formData.additionalDetails.forEach((detail, index) => {
-                    lines.push(`- 연출컷 ${index + 1}`);
-                    lines.push(`  · 제품명: ${detail.productName || '-'}`);
-                    lines.push(`  · 설명: ${detail.description || '-'}`);
-                });
+            if (!navigator.canShare({ files: [file] })) {
+                return false;
             }
 
-            lines.push('');
-            lines.push('4. 추가 요청 사항 및 코멘트');
-            lines.push(formData.comments || '-');
-
-            return lines.join('\n');
-        }
-
-        async function shareTextContent(title, text) {
-            if (navigator.share) {
-                await navigator.share({ title, text });
-                return true;
-            }
-            return false;
+            await navigator.share({
+                title: '작업 지시서',
+                text: '카카오톡으로 작업 지시서를 전달해주세요.',
+                files: [file]
+            });
+            return true;
         }
 
         async function copyTextToClipboard(text) {
@@ -1302,37 +1222,46 @@
         saveBtn.addEventListener('click', async () => {
             const data = await collectFormData();
             const fileName = `STUDIO_작업지시서_${data.basicInfo.brandName || '미정'}_${data.basicInfo.shootDate || '미정'}.html`;
-            const summaryText = generateTextSummary(data);
+            const fullHtmlContent = generateFilledHtml(data);
+            const blob = new Blob([fullHtmlContent], { type: 'text/html;charset=utf-8' });
 
             if (isIPhone()) {
+                const htmlFile = new File([blob], fileName, { type: 'text/html' });
+
                 try {
-                    const shared = await shareTextContent('작업 지시서', summaryText);
+                    const shared = await shareHtmlFile(htmlFile);
                     if (shared) {
-                        showCustomAlert('아이폰에서는 텍스트 공유 기능이 실행되었습니다. 카카오톡 등 원하는 앱을 선택해 전달해주세요.');
+                        showCustomAlert('아이폰 공유창이 열렸습니다. 카카오톡을 선택해 저장된 웹페이지 파일을 전달해주세요.');
                         return;
                     }
                 } catch (error) {
-                    console.error('공유 기능 실행 중 오류:', error);
+                    console.error('HTML 파일 공유 중 오류:', error);
                 }
 
                 try {
-                    const copied = await copyTextToClipboard(summaryText);
+                    const fileUrl = URL.createObjectURL(blob);
+                    window.open(fileUrl, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(fileUrl), 60000);
+                    showCustomAlert('아이폰에서 파일 공유가 지원되지 않아 저장된 웹페이지를 새 탭으로 열었습니다. 하단 공유 버튼을 눌러 카카오톡으로 전달해주세요.');
+                    return;
+                } catch (error) {
+                    console.error('웹페이지 열기 중 오류:', error);
+                }
+
+                try {
+                    const copied = await copyTextToClipboard(window.location.href);
                     if (copied) {
-                        showCustomAlert('아이폰에서는 텍스트가 복사되었습니다. 카카오톡 대화창에 붙여넣어 전달해주세요.');
+                        showCustomAlert('아이폰에서 파일 공유가 어려워 현재 페이지 주소를 복사했습니다. 카카오톡에 붙여넣어 전달해주세요.');
                         return;
                     }
                 } catch (error) {
-                    console.error('클립보드 복사 중 오류:', error);
+                    console.error('주소 복사 중 오류:', error);
                 }
 
-                summaryTextArea.value = summaryText;
-                dataSummaryModal.classList.add('show');
-                showCustomAlert('아이폰에서는 자동 공유가 어려워 텍스트 요약창을 열었습니다. 내용을 복사해 카카오톡으로 전달해주세요.');
+                showCustomAlert('아이폰에서 파일 공유를 실행하지 못했습니다. Safari 공유 메뉴에서 카카오톡을 직접 선택해 전달해주세요.');
                 return;
             }
 
-            const fullHtmlContent = generateFilledHtml(data);
-            const blob = new Blob([fullHtmlContent], { type: 'text/html;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

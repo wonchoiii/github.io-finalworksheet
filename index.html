@@ -324,7 +324,7 @@
         <div class="modal-content max-w-lg text-center">
             <h3 class="text-2xl font-bold mb-4 text-blue-700">중요 안내</h3>
             <p class="text-lg text-gray-800 mb-6 font-semibold">
-                작업지시서 저장 / 공유하기 버튼으로 카카오톡에 공유해주세요.
+                휴대폰은 카카오톡으로 공유하고, 데스크탑은 저장 후 카카오톡으로 전달해주세요.
             </p>
             <div class="flex justify-center">
                 <button id="initial-alert-ok-btn" class="btn btn-primary px-8 py-3">확인했습니다</button>
@@ -873,6 +873,10 @@
             return `${safeDate}_${safeBrand}.html`;
         }
 
+        function isMobileDevice() {
+            return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        }
+
         async function shareHtmlFile(file) {
             if (!navigator.share || !navigator.canShare) {
                 return false;
@@ -1251,44 +1255,59 @@
             const fileName = formatFileName(data.basicInfo.shootDate, data.basicInfo.brandName);
             const fullHtmlContent = generateFilledHtml(data);
             const blob = new Blob([fullHtmlContent], { type: 'text/html;charset=utf-8' });
-            const htmlFile = new File([blob], fileName, { type: 'text/html' });
-            let renderedPageUrl = '';
 
-            await showCustomAlertAsync('확인 버튼을 누르면 공유창이 열립니다. 카카오톡을 선택해서 저장된 원본 웹페이지를 전달해주세요.');
+            if (isMobileDevice()) {
+                const htmlFile = new File([blob], fileName, { type: 'text/html' });
+                let renderedPageUrl = '';
 
-            try {
-                const shared = await shareHtmlFile(htmlFile);
-                if (shared) {
-                    return;
+                await showCustomAlertAsync('확인 버튼을 누르면 공유창이 열립니다. 카카오톡을 선택해서 저장된 원본 웹페이지를 전달해주세요.');
+
+                try {
+                    const shared = await shareHtmlFile(htmlFile);
+                    if (shared) {
+                        return;
+                    }
+                } catch (error) {
+                    console.error('HTML 파일 공유 중 오류:', error);
                 }
-            } catch (error) {
-                console.error('HTML 파일 공유 중 오류:', error);
-            }
 
-            try {
-                renderedPageUrl = URL.createObjectURL(blob);
-                const sharedPage = await shareRenderedPage(renderedPageUrl);
-                if (sharedPage) {
-                    setTimeout(() => URL.revokeObjectURL(renderedPageUrl), 60000);
-                    return;
-                }
-            } catch (error) {
-                console.error('렌더링된 웹페이지 공유 중 오류:', error);
-            }
-
-            try {
-                if (!renderedPageUrl) {
+                try {
                     renderedPageUrl = URL.createObjectURL(blob);
+                    const sharedPage = await shareRenderedPage(renderedPageUrl);
+                    if (sharedPage) {
+                        setTimeout(() => URL.revokeObjectURL(renderedPageUrl), 60000);
+                        return;
+                    }
+                } catch (error) {
+                    console.error('렌더링된 웹페이지 공유 중 오류:', error);
                 }
-                window.open(renderedPageUrl, '_blank');
-                setTimeout(() => URL.revokeObjectURL(renderedPageUrl), 60000);
-                showCustomAlert('직접 파일 공유가 지원되지 않아 저장된 원본 웹페이지를 새 탭으로 열었습니다. 브라우저 공유 버튼을 눌러 카카오톡으로 전달해주세요.');
+
+                try {
+                    if (!renderedPageUrl) {
+                        renderedPageUrl = URL.createObjectURL(blob);
+                    }
+                    window.open(renderedPageUrl, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(renderedPageUrl), 60000);
+                    showCustomAlert('직접 파일 공유가 지원되지 않아 저장된 원본 웹페이지를 새 탭으로 열었습니다. 브라우저 공유 버튼을 눌러 카카오톡으로 전달해주세요.');
+                    return;
+                } catch (error) {
+                    console.error('웹페이지 열기 중 오류:', error);
+                }
+
+                showCustomAlert('원본 웹페이지 공유를 실행하지 못했습니다. 브라우저 공유 메뉴에서 카카오톡을 직접 선택해 전달해주세요.');
                 return;
-            } catch (error) {
-                console.error('웹페이지 열기 중 오류:', error);
             }
 
-            showCustomAlert('원본 웹페이지 공유를 실행하지 못했습니다. 브라우저 공유 메뉴에서 카카오톡을 직접 선택해 전달해주세요.');
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showCustomAlert('파일이 저장되었습니다. 데스크탑에서 저장된 파일을 카카오톡으로 전달해주세요.');
         });
 
         copySummaryBtn.addEventListener('click', async () => {
